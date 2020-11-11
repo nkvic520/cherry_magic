@@ -33,6 +33,8 @@ dependencies:
   pull_to_refresh: ^1.6.2
   html: ^0.14.0+4
   webview_flutter: ^1.0.7
+  excel: ^1.1.5
+  path_provider: ^1.6.24
 
 dev_dependencies:
   flutter_test:
