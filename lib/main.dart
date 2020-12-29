@@ -1,10 +1,16 @@
+import 'dart:async';
+import 'dart:io';
 
+import 'package:cherry_magic/DatabaseHelper.dart';
 import 'package:cherry_magic/api.dart';
 import 'package:cherry_magic/detail.dart';
 import 'package:cherry_magic/discussion.dart';
+import 'package:cherry_magic/fans.dart';
+import 'package:excel/excel.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/painting.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
 
 void main() {
@@ -15,30 +21,95 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'cherry magic group',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: MyHomePage(title: 'cherry magic group'),
+      home: HomePage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  MyHomePage({Key key, this.title}) : super(key: key);
+class HomePage extends StatefulWidget {
+  @override
+  _HomePageState createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  Api _api = Api();
+  int member = 0;
+  List<Fans> fans = [];
+  Timer timer;
+
+  @override
+  void dispose() async {
+    timer?.cancel();
+    timer = null;
+    await DbHelper().close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    timer = Timer.periodic(Duration(hours: 1), (timer) async {
+      await _api.fetchMember().then((value) => {member = value});
+      if (mounted) setState(() {});
+      await DbHelper().saveItem(Fans(member, DateTime.now().toString()));
+    });
+    getList();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('cherry magic成员数：$member'),
+        actions: [
+          GestureDetector(
+            child: Container(
+              alignment: Alignment.center,
+              margin: EdgeInsets.only(right: 10),
+              child: Text('帖子'),
+            ),
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) {
+                return DiscussionPage(
+                  title: "帖子",
+                );
+              }));
+            },
+          )
+        ],
+      ),
+      body: ListView.builder(
+        itemBuilder: (context, index) {
+          return Center(
+            child: Text(
+                '${fans[index].member}------${fans[index].recordTime.substring(0, 16)}'),
+          );
+        },
+        itemCount: fans.length,
+      ),
+    );
+  }
+
+  getList() async {
+    fans = await DbHelper().getTotalList();
+  }
+}
+
+class DiscussionPage extends StatefulWidget {
+  DiscussionPage({Key key, this.title}) : super(key: key);
 
   final String title;
 
   @override
-  _MyHomePageState createState() => _MyHomePageState();
+  _DiscussionPageState createState() => _DiscussionPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  Api _api = new Api();
+class _DiscussionPageState extends State<DiscussionPage> {
+  Api _api = Api();
   RefreshController _refreshController =
       RefreshController(initialRefresh: true);
-  List<Discussion> discussions = new List<Discussion>();
+  List<Discussion> discussions = List<Discussion>();
   int index = 0;
 
   @override
@@ -152,59 +223,60 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          // int index = 0;
-          // List<Discussion> discussions = new List<Discussion>();
-          // List<Discussion> discussionsTmp = new List<Discussion>();
-          //
-          // while (index != -1) {
-          //   print('index--$index');
-          //   discussionsTmp.clear();
-          //   await Future.delayed(Duration(milliseconds: 1000));
-          //   discussionsTmp = await _api.fetchDiscussion(index);
-          //   if (discussionsTmp.length > 0) {
-          //     discussions.addAll(discussionsTmp);
-          //     index = index + 25;
-          //   } else {
-          //     index = -1;
-          //   }
-          // }
-          //
-          // print(discussions.length);
+          print('帖子总数：${discussions.length}');
 
-          // var excel = Excel.createExcel();
-          // Sheet sheetObject = excel['sheet1'];
-          // for (int i = 0; i < 5; i++) {
-          //   for (int j = 0; j < discussions.length + 1; j++) {
-          //     var cell = sheetObject.cell(
-          //         CellIndex.indexByColumnRow(columnIndex: i, rowIndex: j));
-          //     if (j == 0) {
-          //       switch (i) {
-          //         case 0:
-          //           cell.value = "标题";
-          //           break;
-          //         case 1:
-          //           cell.value = "楼主";
-          //           break;
-          //         case 2:
-          //           cell.value = "回应";
-          //           break;
-          //         case 3:
-          //           cell.value = "最后回应";
-          //           break;
-          //         case 4:
-          //           cell.value = "链接";
-          //           break;
-          //       }
-          //     } else {}
-          //   }
-          // }
+          var excel = Excel.createExcel();
+          Sheet sheetObject = excel['discussion'];
+          for (int i = 0; i < 5; i++) {
+            for (int j = 0; j < discussions.length + 1; j++) {
+              var cell = sheetObject.cell(
+                  CellIndex.indexByColumnRow(columnIndex: i, rowIndex: j));
+              if (j == 0) {
+                switch (i) {
+                  case 0:
+                    cell.value = "标题";
+                    break;
+                  case 1:
+                    cell.value = "楼主";
+                    break;
+                  case 2:
+                    cell.value = "回应";
+                    break;
+                  case 3:
+                    cell.value = "最后回应";
+                    break;
+                  case 4:
+                    cell.value = "链接";
+                    break;
+                }
+              } else {
+                switch (i) {
+                  case 0:
+                    cell.value = discussions[j - 1].title;
+                    break;
+                  case 1:
+                    cell.value = discussions[j - 1].author;
+                    break;
+                  case 2:
+                    cell.value = discussions[j - 1].response;
+                    break;
+                  case 3:
+                    cell.value = discussions[j - 1].lastTime;
+                    break;
+                  case 4:
+                    cell.value = discussions[j - 1].url;
+                    break;
+                }
+              }
+            }
+          }
 
-          // excel.encode().then((onValue) async {
-          //   final directory = await getExternalStorageDirectory();
-          //   File("${directory.path}/excel.xlsx")
-          //     ..createSync(recursive: true)
-          //     ..writeAsBytesSync(onValue);
-          // });
+          excel.encode().then((onValue) async {
+            final directory = await getExternalStorageDirectory();
+            File("${directory.path}/cherrymagic.xlsx")
+              ..createSync(recursive: true)
+              ..writeAsBytesSync(onValue);
+          });
         },
         child: Icon(Icons.exit_to_app),
       ),

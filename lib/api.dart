@@ -38,4 +38,22 @@ class Api {
 
     return books;
   }
+
+  Future<int> fetchMember() async {
+    Dio dio = new Dio();
+    dio.options.responseType = ResponseType.json;
+    Response response =
+        await dio.get("https://www.douban.com/group/706910/members");
+    int member = 0;
+    try {
+      var document = parse(response.data.toString());
+      var content = document.querySelector(".ft-members");
+      member = int.tryParse(content.querySelector("i").text.trim());
+
+      return member;
+    } catch (e) {
+      print(e);
+    }
+    return member;
+  }
 }
